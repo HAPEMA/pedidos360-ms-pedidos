@@ -87,7 +87,12 @@ public class SecurityConfig {
         // Así el servicio arranca aunque Cognito no sea alcanzable (y en los tests no se llama a internet).
         NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(issuer + "/.well-known/jwks.json").build();
 
-        OAuth2TokenValidator<Jwt> validador = new DelegatingOAuth2TokenValidator<>(
+        decoder.setJwtValidator(validadorCognito(issuer, clientId));
+        return decoder;
+    }
+
+    static OAuth2TokenValidator<Jwt> validadorCognito(String issuer, String clientId) {
+        return new DelegatingOAuth2TokenValidator<>(
                 // Firma + exp/nbf + iss == nuestro User Pool (rechaza tokens de otros pools).
                 JwtValidators.createDefaultWithIssuer(issuer),
                 // Solo access tokens: un id token también está firmado por Cognito, pero no es para APIs.
@@ -95,8 +100,6 @@ public class SecurityConfig {
                 // El access token de Cognito no trae "aud"; client_id cumple el papel de audience:
                 // rechaza tokens emitidos para otra app cliente del mismo pool.
                 new JwtClaimValidator<String>("client_id", clientId::equals));
-        decoder.setJwtValidator(validador);
-        return decoder;
     }
 
     @Bean

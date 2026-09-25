@@ -5,16 +5,15 @@ import cl.duoc.pedidos.dto.PedidoResponse;
 import cl.duoc.pedidos.service.PedidoService;
 import cl.duoc.pedidos.service.UsuarioActual;
 import jakarta.validation.Valid;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -44,12 +43,22 @@ public class PedidoController {
 
     @PostMapping
     public ResponseEntity<PedidoResponse> crear(@Valid @RequestBody PedidoRequest request,
-                                                Authentication auth,
-                                                @RequestHeader(HttpHeaders.AUTHORIZATION) String authorization) {
-        // El header Authorization se reenvía tal cual a ms-catalogo (token relay).
-        PedidoResponse creado = service.crear(request, UsuarioActual.desde(auth), authorization);
+                                                Authentication auth) {
+        PedidoResponse creado = service.crear(request, UsuarioActual.desde(auth), authorizationRecibido(auth));
         // Location relativa: detrás del API Gateway el host interno del EC2 no debe filtrarse.
         return ResponseEntity.created(URI.create("/api/pedidos/" + creado.id())).body(creado);
+    }
+
+    /**
+     * Token relay: reconstruye el header Authorization con el mismo token que llegó en la request.
+     * Se toma del contexto de seguridad (y no del header crudo) para reenviar solo un token que
+     * este servicio ya validó.
+     */
+    private static String authorizationRecibido(Authentication auth) {
+        if (auth instanceof JwtAuthenticationToken jwtAuth) {
+            return "Bearer " + jwtAuth.getToken().getTokenValue();
+        }
+        throw new IllegalStateException("La request no viene autenticada con un JWT");
     }
 
     @DeleteMapping("/{id}")
