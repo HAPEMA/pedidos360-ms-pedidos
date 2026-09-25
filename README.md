@@ -159,42 +159,97 @@ Los tests automatizados cubren todos estos casos.
 | Variable | Obligatoria | Ejemplo / valor por defecto | Uso |
 |----------|-------------|-----------------------------|-----|
 | `PORT` | no | `8082` | Puerto HTTP |
-| `DB_URL` | sí | `jdbc:postgresql://<endpoint-rds>:5432/pedidos360` | JDBC de RDS |
-| `DB_USER` | sí | `pedidos_app` | Usuario de BD |
+| `DB_URL` | sí | `jdbc:postgresql://pedidos360-db.cdsrcop1stid.us-east-1.rds.amazonaws.com:5432/pedidos_db` | JDBC de RDS |
+| `DB_USER` | sí | `postgres` | Usuario de BD |
 | `DB_PASS` | sí | — | Clave de BD |
 | `CATALOGO_URL` | no | `http://localhost:8081` | Base de ms-catalogo |
-| `COGNITO_POOL_ID` | sí | `us-east-1_XXXXXXXXX` | Arma el issuer `https://cognito-idp.us-east-1.amazonaws.com/<pool>` |
-| `COGNITO_CLIENT_ID` | sí | — | App client esperada en el claim `client_id` |
+| `COGNITO_POOL_ID` | sí | `us-east-1_yJTuOqej9` | Arma el issuer `https://cognito-idp.us-east-1.amazonaws.com/<pool>` |
+| `COGNITO_CLIENT_ID` | sí | `55g18pciai9kmgp5818ta6ur28` | App client esperada en el claim `client_id` |
 | `FRONT_ORIGIN` | no | `http://localhost:4200` | Origen permitido por CORS |
 
 La plantilla está en [`deploy/ms-pedidos.env.example`](deploy/ms-pedidos.env.example).
 
-## Correr en local
+## Correr en local (PowerShell)
 
-Requisitos: JDK 17 o superior. No hace falta Maven instalado porque se usa `./mvnw`.
+Requisitos: JDK 17 o superior (no hace falta Maven instalado, se usa el wrapper).
+El perfil `local` usa **H2 en memoria** (RDS no es accesible desde el PC) y trae por defecto el User Pool
+(`us-east-1_yJTuOqej9`) y el App Client (`55g18pciai9kmgp5818ta6ur28`) reales, así que valida tokens reales de Cognito.
 
-El perfil `local` usa H2 en memoria y valores por defecto para Cognito, así que arranca sin variables de entorno:
-
-```bash
-# Terminal 1: ms-catalogo (repo pedidos360-ms-catalogo) en el puerto 8081
-./mvnw spring-boot:run -Dspring-boot.run.profiles=local
-
-# Terminal 2: ms-pedidos en el puerto 8082
-./mvnw spring-boot:run -Dspring-boot.run.profiles=local
-curl http://localhost:8082/actuator/health   # {"status":"UP",...}
+```powershell
+# Primero levanta ms-catalogo en el puerto 8081 (repo pedidos360-ms-catalogo)
+.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=local"
 ```
 
-Para llamar a `/api/pedidos` con un token real de Cognito, define el pool y el client correctos:
-
-```bash
-COGNITO_POOL_ID=us-east-1_AbCdEf123 COGNITO_CLIENT_ID=<app-client-id> \
-  ./mvnw spring-boot:run -Dspring-boot.run.profiles=local
-
-curl -H "Authorization: Bearer $ACCESS_TOKEN" -H "Content-Type: application/json" \
-     -d '{"especieId":1,"cantidad":1}' http://localhost:8082/api/pedidos
+```powershell
+curl.exe http://localhost:8082/actuator/health        # 200 {"status":"UP"}
+curl.exe -i http://localhost:8082/api/pedidos         # 401 (falta token)
 ```
 
-El mismo token se reenvía a ms-catalogo, así que este también tiene que estar configurado con el mismo pool.
+Con un access token real de Cognito (lo obtiene el front con `ng serve`):
+
+```powershell
+$token = "<access token>"
+curl.exe -H "Authorization: Bearer $token" -H "Content-Type: application/json" `
+  -d '{\"especieId\":1,\"cantidad\":1}' http://localhost:8082/api/pedidos
+```
+
+El mismo token se reenvía a ms-catalogo, que en local usa el mismo pool por defecto.
+
+## Despliegue en EC2
+
+Valores de la infraestructura:
+
+| Recurso | Valor |
+|---------|-------|
+| Región | `us-east-1` |
+| EC2 (Elastic IP) | `52.71.179.5` · ms-catalogo `8081` · ms-pedidos `8082` |
+| Bucket de artefactos | `s3://pedidos360-artefactos-hapema` |
+| RDS | `pedidos360-db.cdsrcop1stid.us-east-1.rds.amazonaws.com:5432` · base `pedidos_db` · usuario `postgres` |
+| Cognito User Pool / App Client | `us-east-1_yJTuOqej9` / `55g18pciai9kmgp5818ta6ur28` |
+
+**1. Compilar y subir el jar a S3** (desde tu PC, PowerShell, con AWS CLI configurado):
+
+```powershell
+.\mvnw.cmd clean package
+aws s3 cp target\ms-pedidos.jar s3://pedidos360-artefactos-hapema/ms-pedidos.jar
+```
+
+**2. En el EC2** (Amazon Linux 2023, conectado por SSH o Session Manager; el rol de la instancia debe poder leer el bucket):
+
+```bash
+# Java y directorios (solo la primera vez)
+sudo dnf install -y java-17-amazon-corretto-headless
+sudo mkdir -p /opt/pedidos360 /etc/pedidos360
+
+# Descargar el jar
+sudo aws s3 cp s3://pedidos360-artefactos-hapema/ms-pedidos.jar /opt/pedidos360/ms-pedidos.jar
+sudo chown ec2-user:ec2-user /opt/pedidos360/ms-pedidos.jar
+
+# Variables de entorno: copiar la plantilla y reemplazar los REEMPLAZAR_EN_EC2
+# (deploy/ del repo clonado o copiado al EC2)
+sudo cp deploy/ms-pedidos.env.example /etc/pedidos360/ms-pedidos.env
+sudo vi /etc/pedidos360/ms-pedidos.env      # DB_PASS
+sudo chmod 600 /etc/pedidos360/ms-pedidos.env
+sudo grep -c REEMPLAZAR_EN_EC2 /etc/pedidos360/ms-pedidos.env   # debe imprimir 0
+
+# Servicio systemd
+sudo cp deploy/ms-pedidos.service /etc/systemd/system/ms-pedidos.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now ms-pedidos
+sudo systemctl status ms-pedidos
+sudo journalctl -u ms-pedidos -f
+```
+
+**3. Probar** (desde tu PC; el security group debe permitir el puerto 8082):
+
+```powershell
+curl.exe -i http://52.71.179.5:8082/actuator/health    # 200 {"status":"UP"}
+curl.exe -i http://52.71.179.5:8082/api/pedidos        # 401 (sin token)
+```
+
+**Actualizar una versión**: repetir el paso 1, volver a descargar el jar en el EC2 y `sudo systemctl restart ms-pedidos`.
+
+Con `ddl-auto=update`, Hibernate crea la tabla `pedido` en el primer arranque.
 
 ## Construir y probar
 
@@ -207,39 +262,6 @@ Los tests no llaman a internet ni a ms-catalogo real:
 - `CatalogoClientTest` (`MockRestServiceServer`): reenvía `Authorization`, 404 → 404, 5xx o timeout → 502.
 - `SecurityConfigTest`: los validadores rechazan *id token*, otro `client_id`, otro issuer y token expirado; mapeo de scopes, grupos y `username`.
 - `PedidoControllerTest` (MockMvc + `jwt()`, con `CatalogoClient` mockeado y H2): la matriz de seguridad completa y los códigos 201/400/404/409/502.
-
-## Despliegue en EC2
-
-En la instancia (Amazon Linux 2023 con Corretto 17):
-
-```bash
-# 1. Directorios
-sudo mkdir -p /opt/pedidos360 /etc/pedidos360
-
-# 2. Copiar el jar (desde tu equipo)
-scp target/ms-pedidos.jar ec2-user@<ip-ec2>:/tmp/
-sudo mv /tmp/ms-pedidos.jar /opt/pedidos360/ms-pedidos.jar
-sudo chown ec2-user:ec2-user /opt/pedidos360/ms-pedidos.jar
-
-# 3. Variables de entorno (solo root las puede leer; systemd las carga antes de cambiar a ec2-user)
-sudo cp deploy/ms-pedidos.env.example /etc/pedidos360/ms-pedidos.env
-sudo vi /etc/pedidos360/ms-pedidos.env
-sudo chmod 600 /etc/pedidos360/ms-pedidos.env
-
-# 4. Servicio systemd
-sudo cp deploy/ms-pedidos.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now ms-pedidos
-
-# 5. Verificar
-systemctl status ms-pedidos
-journalctl -u ms-pedidos -f
-curl http://localhost:8082/actuator/health
-```
-
-Para actualizar, reemplaza el jar y ejecuta `sudo systemctl restart ms-pedidos`.
-
-Con `ddl-auto=update`, Hibernate crea la tabla `pedido` en el primer arranque.
 
 ## Limitaciones y evolución
 
