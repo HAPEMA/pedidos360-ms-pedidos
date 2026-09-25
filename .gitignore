@@ -1,0 +1,28 @@
+# Maven
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# IDEs
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.classpath
+.project
+.settings/
+.factorypath
+.sts4-cache/
+nbproject/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Variables de entorno (nunca secretos en el repo)
+.env
+*.env
+!*.env.example
+
+# Logs
+*.log
