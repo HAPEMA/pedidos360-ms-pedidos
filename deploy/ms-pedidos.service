@@ -1,0 +1,21 @@
+# /etc/systemd/system/ms-pedidos.service
+[Unit]
+Description=Pedidos360 - ms-pedidos
+# Arranca después de la red y de ms-catalogo (lo consume para crear pedidos).
+After=network-online.target ms-catalogo.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Usuario sin privilegios: si el proceso se compromete, no es root.
+User=ec2-user
+# Variables (DB, Cognito, CORS) fuera del repo y del jar; el archivo debe tener permisos 600.
+EnvironmentFile=/etc/pedidos360/ms-pedidos.env
+WorkingDirectory=/opt/pedidos360
+ExecStart=/usr/bin/java -Xmx384m -jar /opt/pedidos360/ms-pedidos.jar
+SuccessExitStatus=143
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
