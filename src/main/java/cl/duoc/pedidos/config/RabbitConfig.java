@@ -1,10 +1,6 @@
 package cl.duoc.pedidos.config;
 
-import org.springframework.amqp.core.Binding;
-import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.DirectExchange;
-import org.springframework.amqp.core.Queue;
-import org.springframework.amqp.core.QueueBuilder;
 import org.springframework.amqp.core.TopicExchange;
 import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
@@ -41,42 +37,11 @@ public class RabbitConfig {
         return new DirectExchange(props.exchanges().dlx(), true, false);
     }
 
-    // --- Notificaciones: aviso asíncrono al crear un pedido ---
-
-    @Bean
-    public Queue notificacionesQueue() {
-        return QueueBuilder.durable(props.queues().notificaciones())
-                .withArgument("x-dead-letter-exchange", props.exchanges().dlx())
-                .withArgument("x-dead-letter-routing-key", dlq(props.queues().notificaciones()))
-                .build();
-    }
-
-    /** pedido.creado → cola de este servicio. */
-    @Bean
-    public Binding notificacionesBinding() {
-        return BindingBuilder.bind(notificacionesQueue()).to(pedidosExchange()).with(props.routingKeys().pedidoCreado());
-    }
-
-    @Bean
-    public Queue notificacionesDeadLetterQueue() {
-        return QueueBuilder.durable(dlq(props.queues().notificaciones())).build();
-    }
-
-    /** Mensajes muertos de la cola → su DLQ, por routing key {cola}.dlq. */
-    @Bean
-    public Binding notificacionesDeadLetterBinding() {
-        return BindingBuilder.bind(notificacionesDeadLetterQueue()).to(deadLetterExchange()).with(dlq(props.queues().notificaciones()));
-    }
-
     // --- Serialización ---
 
     /** JSON (Jackson 3) en lugar de serialización Java; Spring Boot lo aplica a RabbitTemplate y listeners. */
     @Bean
     public MessageConverter jsonMessageConverter() {
         return new JacksonJsonMessageConverter();
-    }
-
-    private String dlq(String cola) {
-        return cola + props.dlqSuffix();
     }
 }

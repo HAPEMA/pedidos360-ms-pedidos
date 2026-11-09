@@ -17,10 +17,7 @@ app:
     exchanges:
       pedidos: adopciones.pedidos   # eventos del ciclo de vida del pedido (topic)
       dlx: adopciones.dlx           # dead-letter exchange compartido (direct)
-    queues:
-      notificaciones: pedidos.notificaciones   # TODO: confirmar caso de uso (aviso al crear pedido)
-    # La DLQ de cada cola se llama {cola}{dlq-suffix}; su routing key es el mismo nombre.
-    dlq-suffix: .dlq
+    # ms-pedidos solo publica: las colas (y sus DLQ) las declaran ms-notificaciones y ms-documentos.
     routing-keys:
       pedido-creado: pedido.creado
       animal-asignado: animal.asignado
