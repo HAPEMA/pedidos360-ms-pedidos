@@ -61,6 +61,8 @@ Todas las respuestas son JSON, también los errores: `{"status": n, "error": "me
 | `GET /api/pedidos` | scope `pedidos360-api/read` | **200**. ADMIN ve todos; el resto solo los propios. Orden: más reciente primero |
 | `GET /api/pedidos/{id}` | scope `read` + dueño o ADMIN | **200** · **403** si es de otro usuario · **404** |
 | `POST /api/pedidos` | scope `pedidos360-api/write` | **201** · **400** validación · **404** especie inexistente · **409** stock insuficiente · **502** catálogo caído |
+| `POST /api/pedidos/{id}/asignar` | scope `write` + dueño (claim `sub`) o ADMIN | **200** (PENDIENTE → ASIGNADO, publica `animal.asignado`) · **403** · **404** · **409** si no está PENDIENTE |
+| `POST /api/pedidos/{id}/confirmar` | scope `write` + dueño (claim `sub`) o ADMIN | **200** (ASIGNADO → CONFIRMADO, publica `adopcion.confirmada` y se genera el ticket) · **403** · **404** · **409** si no está ASIGNADO |
 | `DELETE /api/pedidos/{id}` | scope `write` **y** grupo `ADMIN` | **204** · **404** |
 | `GET /actuator/health` | público | **200** |
 
@@ -159,12 +161,12 @@ Los tests automatizados cubren todos estos casos.
 | Variable | Obligatoria | Ejemplo / valor por defecto | Uso |
 |----------|-------------|-----------------------------|-----|
 | `PORT` | no | `8082` | Puerto HTTP |
-| `DB_URL` | sí | `jdbc:postgresql://pedidos360-db.cdsrcop1stid.us-east-1.rds.amazonaws.com:5432/pedidos_db` | JDBC de RDS |
+| `DB_URL` | sí | `jdbc:postgresql://<RDS_HOST>:5432/pedidos_db` | JDBC de RDS |
 | `DB_USER` | sí | `postgres` | Usuario de BD |
 | `DB_PASS` | sí | — | Clave de BD |
 | `CATALOGO_URL` | no | `http://localhost:8081` | Base de ms-catalogo |
-| `COGNITO_POOL_ID` | sí | `us-east-1_yJTuOqej9` | Arma el issuer `https://cognito-idp.us-east-1.amazonaws.com/<pool>` |
-| `COGNITO_CLIENT_ID` | sí | `55g18pciai9kmgp5818ta6ur28` | App client esperada en el claim `client_id` |
+| `COGNITO_POOL_ID` | sí | `<USER_POOL_ID>` | Arma el issuer `https://cognito-idp.us-east-1.amazonaws.com/<pool>` |
+| `COGNITO_CLIENT_ID` | sí | `<APP_CLIENT_ID>` | App client esperada en el claim `client_id` |
 | `FRONT_ORIGIN` | no | `http://localhost:4200` | Origen permitido por CORS |
 
 La plantilla está en [`deploy/ms-pedidos.env.example`](deploy/ms-pedidos.env.example).
@@ -173,7 +175,7 @@ La plantilla está en [`deploy/ms-pedidos.env.example`](deploy/ms-pedidos.env.ex
 
 Requisitos: JDK 17 o superior (no hace falta Maven instalado, se usa el wrapper).
 El perfil `local` usa **H2 en memoria** (RDS no es accesible desde el PC) y trae por defecto el User Pool
-(`us-east-1_yJTuOqej9`) y el App Client (`55g18pciai9kmgp5818ta6ur28`) reales, así que valida tokens reales de Cognito.
+(`<USER_POOL_ID>`) y el App Client (`<APP_CLIENT_ID>`) reales, así que valida tokens reales de Cognito.
 
 ```powershell
 # Primero levanta ms-catalogo en el puerto 8081 (repo pedidos360-ms-catalogo)
@@ -204,8 +206,8 @@ Valores de la infraestructura:
 | Región | `us-east-1` |
 | EC2 (Elastic IP) | `52.71.179.5` · ms-catalogo `8081` · ms-pedidos `8082` |
 | Bucket de artefactos | `s3://pedidos360-artefactos-hapema` |
-| RDS | `pedidos360-db.cdsrcop1stid.us-east-1.rds.amazonaws.com:5432` · base `pedidos_db` · usuario `postgres` |
-| Cognito User Pool / App Client | `us-east-1_yJTuOqej9` / `55g18pciai9kmgp5818ta6ur28` |
+| RDS | `<RDS_HOST>:5432` · base `pedidos_db` · usuario `postgres` |
+| Cognito User Pool / App Client | `<USER_POOL_ID>` / `<APP_CLIENT_ID>` |
 
 **1. Compilar y subir el jar a S3** (desde tu PC, PowerShell, con AWS CLI configurado):
 
