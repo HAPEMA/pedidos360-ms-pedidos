@@ -272,3 +272,16 @@ Los tests no llaman a internet ni a ms-catalogo real:
 - `ddl-auto=update` es cómodo para la evaluación. En producción convendría usar migraciones versionadas (Flyway o Liquibase).
 - El token relay depende de que el access token siga vigente durante la llamada. Para procesos en segundo plano se usaría client credentials con un scope de servicio.
 - No hay reintentos ni circuit breaker hacia ms-catalogo (solo timeouts). Se podría agregar Resilience4j.
+
+<!-- rabbitmq-docker -->
+## RabbitMQ, issuer de Cognito y Docker (añadido)
+
+- **Compilar / probar:** `./mvnw -q -DskipTests package` y `./mvnw test` (en Windows `.\mvnw.cmd`).
+- **Mensajería:** `spring-boot-starter-amqp`; conexión por `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USER`, `RABBITMQ_PASS`
+  (defaults solo para local) y nombres en `src/main/resources/application.yml` (`app.rabbit.*`). `/actuator/health` no depende del broker.
+- `ms-pedidos` publica `pedido.creado` en el exchange `adopciones.pedidos` **después** de guardar el pedido
+  (`EventoPublisher`); si RabbitMQ falla solo se registra en el log y la respuesta HTTP no cambia. Eventos y routing keys en `app.rabbit.*`.
+- **Issuer:** además de `COGNITO_POOL_ID`, se acepta `COGNITO_ISSUER_URI` (tiene prioridad; sin barra final).
+- **Docker:** `docker build -t ms-pedidos .` (multi-stage, JDK 17 → JRE 17). Clúster RabbitMQ y overlay de apps en la raíz:
+  [`docs/RABBITMQ.md`](../docs/RABBITMQ.md).
+- **Topología, flujos y manejo de ACK/NACK/DLQ:** [`docs/RABBITMQ.md`](../docs/RABBITMQ.md).

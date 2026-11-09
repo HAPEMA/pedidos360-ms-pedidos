@@ -30,3 +30,8 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Configuración local: un application-local.* NUEVO nunca se sube por accidente (puede llevar IDs o claves).
+# Los application-local.properties que ya están versionados (H2 + placeholders, los usan los tests con
+# @ActiveProfiles("local")) siguen rastreados: git no ignora archivos que ya están en el índice.
+application-local.*
