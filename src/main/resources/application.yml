@@ -1,0 +1,32 @@
+# Mensajería asíncrona (RabbitMQ). Host y credenciales por variables de entorno;
+# los defaults son solo para desarrollo local (broker en localhost).
+spring:
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASS:guest}
+    listener:
+      simple:
+        acknowledge-mode: manual
+        prefetch: 10
+
+# Único lugar donde viven los nombres de exchanges, colas y routing keys.
+app:
+  rabbit:
+    exchanges:
+      pedidos: adopciones.pedidos   # eventos del ciclo de vida del pedido (topic)
+      dlx: adopciones.dlx           # dead-letter exchange compartido (direct)
+    queues:
+      notificaciones: pedidos.notificaciones   # TODO: confirmar caso de uso (aviso al crear pedido)
+    # La DLQ de cada cola se llama {cola}{dlq-suffix}; su routing key es el mismo nombre.
+    dlq-suffix: .dlq
+    routing-keys:
+      pedido-creado: pedido.creado
+
+# El broker no debe afectar al /actuator/health existente (health check del balanceador):
+# sin RabbitMQ el servicio sigue sirviendo HTTP, solo se pausa la mensajería.
+management:
+  health:
+    rabbit:
+      enabled: false
