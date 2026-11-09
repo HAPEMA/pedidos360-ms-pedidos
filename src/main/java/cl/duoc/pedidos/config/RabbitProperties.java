@@ -12,6 +12,6 @@ public record RabbitProperties(Exchanges exchanges, Queues queues, String dlqSuf
     public record Queues(String notificaciones) {
     }
 
-    public record RoutingKeys(String pedidoCreado) {
+    public record RoutingKeys(String pedidoCreado, String animalAsignado, String adopcionConfirmada) {
     }
 }

@@ -23,6 +23,8 @@ app:
     dlq-suffix: .dlq
     routing-keys:
       pedido-creado: pedido.creado
+      animal-asignado: animal.asignado
+      adopcion-confirmada: adopcion.confirmada
 
 # El broker no debe afectar al /actuator/health existente (health check del balanceador):
 # sin RabbitMQ el servicio sigue sirviendo HTTP, solo se pausa la mensajería.
