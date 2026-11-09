@@ -1,6 +1,8 @@
 package cl.duoc.pedidos.controller;
 
 import cl.duoc.pedidos.dto.PedidoRequest;
+import cl.duoc.pedidos.event.PedidoCreadoEvent;
+import cl.duoc.pedidos.messaging.EventoPublisher;
 import cl.duoc.pedidos.dto.PedidoResponse;
 import cl.duoc.pedidos.service.PedidoService;
 import cl.duoc.pedidos.service.UsuarioActual;
@@ -26,9 +28,11 @@ import java.util.List;
 public class PedidoController {
 
     private final PedidoService service;
+    private final EventoPublisher eventos;
 
-    public PedidoController(PedidoService service) {
+    public PedidoController(PedidoService service, EventoPublisher eventos) {
         this.service = service;
+        this.eventos = eventos;
     }
 
     @GetMapping
@@ -45,6 +49,8 @@ public class PedidoController {
     public ResponseEntity<PedidoResponse> crear(@Valid @RequestBody PedidoRequest request,
                                                 Authentication auth) {
         PedidoResponse creado = service.crear(request, UsuarioActual.desde(auth), authorizationRecibido(auth));
+        // service.crear ya hizo commit: el pedido existe en la BD. Si Rabbit falla, el publisher solo loguea.
+        eventos.publicar(PedidoCreadoEvent.de(creado, subDe(auth)));
         // Location relativa: detrás del API Gateway el host interno del EC2 no debe filtrarse.
         return ResponseEntity.created(URI.create("/api/pedidos/" + creado.id())).body(creado);
     }
@@ -59,6 +65,11 @@ public class PedidoController {
             return "Bearer " + jwtAuth.getToken().getTokenValue();
         }
         throw new IllegalStateException("La request no viene autenticada con un JWT");
+    }
+
+    /** Claim "sub" del JWT ya validado (UUID estable del usuario en Cognito). */
+    private static String subDe(Authentication auth) {
+        return auth instanceof JwtAuthenticationToken jwtAuth ? jwtAuth.getToken().getSubject() : null;
     }
 
     @DeleteMapping("/{id}")
