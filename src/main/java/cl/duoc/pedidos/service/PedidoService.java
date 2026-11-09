@@ -9,6 +9,7 @@ import cl.duoc.pedidos.model.Pedido;
 import cl.duoc.pedidos.repository.PedidoRepository;
 import cl.duoc.pedidos.web.AccesoDenegadoException;
 import cl.duoc.pedidos.web.CatalogoNoDisponibleException;
+import cl.duoc.pedidos.web.EstadoInvalidoException;
 import cl.duoc.pedidos.web.RecursoNoEncontradoException;
 import cl.duoc.pedidos.web.StockInsuficienteException;
 import org.springframework.stereotype.Service;
@@ -67,8 +68,63 @@ public class PedidoService {
         pedido.setTotal(Math.multiplyExact(especie.precio(), request.cantidad()));
         pedido.setEstado(EstadoPedido.PENDIENTE);
         pedido.setCreadoPor(usuario.username());
+        pedido.setCreadoPorSub(usuario.sub());
         pedido.setCreadoEn(Instant.now());
         return PedidoResponse.desde(repository.save(pedido));
+    }
+
+    /** PENDIENTE → ASIGNADO. Solo el dueño del pedido o un admin. */
+    @Transactional
+    public PedidoOperacion asignar(Long id, UsuarioActual usuario) {
+        Pedido pedido = buscarDeDueno(id, usuario);
+        if (pedido.getEstado() != EstadoPedido.PENDIENTE) {
+            throw new EstadoInvalidoException("No se puede asignar el pedido " + id + ": está en estado "
+                    + pedido.getEstado() + " y solo se asignan pedidos PENDIENTE");
+        }
+        pedido.setEstado(EstadoPedido.ASIGNADO);
+        return operacion(repository.save(pedido));
+    }
+
+    /** ASIGNADO → CONFIRMADO. Solo el dueño del pedido o un admin. */
+    @Transactional
+    public PedidoOperacion confirmar(Long id, UsuarioActual usuario) {
+        Pedido pedido = buscarDeDueno(id, usuario);
+        if (pedido.getEstado() != EstadoPedido.ASIGNADO) {
+            String motivo = pedido.getEstado() == EstadoPedido.PENDIENTE
+                    ? "primero hay que asignar el animal"
+                    : "solo se confirman pedidos ASIGNADO";
+            throw new EstadoInvalidoException("No se puede confirmar la adopción del pedido " + id
+                    + ": está en estado " + pedido.getEstado() + " (" + motivo + ")");
+        }
+        pedido.setEstado(EstadoPedido.CONFIRMADO);
+        return operacion(repository.save(pedido));
+    }
+
+    private static PedidoOperacion operacion(Pedido guardado) {
+        return new PedidoOperacion(PedidoResponse.desde(guardado), guardado.getCreadoPorSub());
+    }
+
+    /** Carga el pedido y exige que el usuario sea su dueño (por sub) o admin. */
+    private Pedido buscarDeDueno(Long id, UsuarioActual usuario) {
+        Pedido pedido = buscar(id);
+        if (usuario.esAdmin()) {
+            return pedido;
+        }
+        String subDueno = pedido.getCreadoPorSub();
+        boolean esDueno;
+        if (subDueno != null) {
+            esDueno = subDueno.equals(usuario.sub());
+        } else {
+            // Pedido anterior a la columna creado_por_sub: se reconoce al dueño por username y se completa el sub.
+            esDueno = pedido.getCreadoPor().equals(usuario.username()) && usuario.sub() != null;
+            if (esDueno) {
+                pedido.setCreadoPorSub(usuario.sub());
+            }
+        }
+        if (!esDueno) {
+            throw new AccesoDenegadoException("No eres el dueño de este pedido");
+        }
+        return pedido;
     }
 
     @Transactional

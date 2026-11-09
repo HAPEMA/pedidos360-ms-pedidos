@@ -50,6 +50,11 @@ public class ManejadorErrores {
         return responder(HttpStatus.CONFLICT, e.getMessage());
     }
 
+    @ExceptionHandler(EstadoInvalidoException.class)
+    public ResponseEntity<Map<String, Object>> estadoInvalido(EstadoInvalidoException e) {
+        return responder(HttpStatus.CONFLICT, e.getMessage());
+    }
+
     @ExceptionHandler(CatalogoNoDisponibleException.class)
     public ResponseEntity<Map<String, Object>> catalogoNoDisponible(CatalogoNoDisponibleException e) {
         log.warn("ms-catalogo no disponible: {}", e.getCause() != null ? e.getCause().toString() : e.getMessage());

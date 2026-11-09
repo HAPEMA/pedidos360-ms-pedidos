@@ -48,6 +48,10 @@ public class Pedido {
     @Column(nullable = false)
     private Instant creadoEn;
 
+    // Claim "sub" del dueño (UUID estable de Cognito). Nullable: los pedidos anteriores a esta columna no lo tienen.
+    @Column(length = 64)
+    private String creadoPorSub;
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -71,6 +75,9 @@ public class Pedido {
 
     public String getCreadoPor() { return creadoPor; }
     public void setCreadoPor(String creadoPor) { this.creadoPor = creadoPor; }
+
+    public String getCreadoPorSub() { return creadoPorSub; }
+    public void setCreadoPorSub(String creadoPorSub) { this.creadoPorSub = creadoPorSub; }
 
     public Instant getCreadoEn() { return creadoEn; }
     public void setCreadoEn(Instant creadoEn) { this.creadoEn = creadoEn; }

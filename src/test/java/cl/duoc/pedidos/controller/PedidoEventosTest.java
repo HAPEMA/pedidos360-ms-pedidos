@@ -74,7 +74,7 @@ class PedidoEventosTest {
                 eq(props.routingKeys().pedidoCreado()), evento.capture());
         PedidoCreadoEvent e = (PedidoCreadoEvent) evento.getValue();
         assertThat(e.usuarioSub()).isEqualTo("sub-123");
-        assertThat(repository.findById(e.pedidoId())).isPresent();
+        assertThat(repository.findById(e.pedidoId()).orElseThrow().getCreadoPorSub()).isEqualTo("sub-123");
     }
 
     @Test

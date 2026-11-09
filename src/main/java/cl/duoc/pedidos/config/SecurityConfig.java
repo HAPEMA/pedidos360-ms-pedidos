@@ -65,6 +65,9 @@ public class SecurityConfig {
                         // Mínimo privilegio: cada método exige el scope específico.
                         .requestMatchers(HttpMethod.GET, "/api/pedidos/**").hasAuthority(SCOPE_READ)
                         .requestMatchers(HttpMethod.POST, "/api/pedidos").hasAuthority(SCOPE_WRITE)
+                        // Asignar/confirmar: scope write; que sea el dueño (o admin) se valida en el servicio.
+                        .requestMatchers(HttpMethod.POST, "/api/pedidos/*/asignar", "/api/pedidos/*/confirmar")
+                        .hasAuthority(SCOPE_WRITE)
                         // Borrar exige las dos cosas: la app tiene permiso de escritura Y el usuario es ADMIN.
                         .requestMatchers(HttpMethod.DELETE, "/api/pedidos/**").access(AuthorizationManagers.allOf(
                                 AuthorityAuthorizationManager.hasAuthority(SCOPE_WRITE),
